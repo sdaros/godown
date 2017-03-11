@@ -62,6 +62,8 @@ func (s site) checkStatus(app *App) {
 		}
 		if resp.StatusCode != http.StatusOK {
 			s.status = resp.Status
+			// app.unreachableSites of type chan []site
+			// app.unreachableSites = append(app.unreachableSite, <- s)
 			app.siteIsDown <- s
 		}
 	}(s.url)
