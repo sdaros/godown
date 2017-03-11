@@ -11,11 +11,10 @@ import (
 )
 
 type App struct {
-	Urls             []string
-	client           *http.Client
-	unreachableSites []site
-	siteIsDown       chan site
-	wg               sync.WaitGroup
+	Urls      []string
+	client    *http.Client
+	downSites chan site
+	wg        sync.WaitGroup
 }
 
 type site struct {
@@ -29,17 +28,17 @@ func main() {
 		os.Exit(-1)
 	}
 	app := newApp()
-	app.siteIsDown = make(chan site)
+	app.downSites = make(chan site, len(app.Urls))
 	for _, url := range app.Urls {
 		app.wg.Add(1)
 		site := site{url: url}
 		site.isDown(app)
 	}
-	// wait until all urls have been checked before proceeding
+	// Wait until all sites are checked
 	app.wg.Wait()
-	close(app.siteIsDown)
-	if len(app.unreachableSites) != 0 {
-		for _, v := range app.unreachableSites {
+	close(app.downSites)
+	if len(app.downSites) > 0 {
+		for v := range app.downSites {
 			log.Printf("URL %v \n returned status: %v", v.url, v.status)
 		}
 		os.Exit(-1)
@@ -47,36 +46,19 @@ func main() {
 }
 
 func (s site) isDown(app *App) {
-	app.waitThenAddDownSite()
-	s.checkStatus(app)
-}
-
-func (s site) checkStatus(app *App) {
 	go func(url string) {
 		defer app.wg.Done()
 		resp, err := app.client.Head(url)
 		if err != nil {
 			s.status = err.Error()
-			app.siteIsDown <- s
+			app.downSites <- s
 			return
 		}
 		if resp.StatusCode != http.StatusOK {
 			s.status = resp.Status
-			// app.unreachableSites of type chan []site
-			// app.unreachableSites = append(app.unreachableSite, <- s)
-			app.siteIsDown <- s
+			app.downSites <- s
 		}
 	}(s.url)
-}
-
-func (app *App) waitThenAddDownSite() {
-	go func() {
-		for {
-			site := <-app.siteIsDown
-			// TODO: Still seems to be a data race here
-			app.unreachableSites = append(app.unreachableSites, site)
-		}
-	}()
 }
 
 func newApp() *App {
