@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -13,6 +14,8 @@ type App struct {
 	Urls             []string
 	client           *http.Client
 	unreachableSites []site
+	siteIsDown       chan site
+	wg               sync.WaitGroup
 }
 
 type site struct {
@@ -20,21 +23,21 @@ type site struct {
 	status string
 }
 
-var siteDown chan site
-
 func main() {
-	app := new(App)
-	siteDown = make(chan site)
-	configFile := os.Args[1]
-	app.loadConfig(configFile)
-
-	// Timeout after 10 seconds
-	tr := &http.Transport{
-		IdleConnTimeout: 10 * time.Second,
+	if len(os.Args) <= 1 {
+		fmt.Print("usage: godown <config.json>\n")
+		os.Exit(-1)
 	}
-	app.client = &http.Client{Transport: tr}
-	app.waitForThenAddUnrechableSite()
-	app.checkForUnrechableSite()
+	app := newApp()
+	app.siteIsDown = make(chan site)
+	for _, url := range app.Urls {
+		app.wg.Add(1)
+		site := site{url: url}
+		site.isDown(app)
+	}
+	// wait until all urls have been checked before proceeding
+	app.wg.Wait()
+	close(app.siteIsDown)
 	if len(app.unreachableSites) != 0 {
 		for _, v := range app.unreachableSites {
 			log.Printf("URL %v \n returned status: %v", v.url, v.status)
@@ -43,33 +46,49 @@ func main() {
 	}
 }
 
-func (app *App) waitForThenAddUnrechableSite() {
+func (s site) isDown(app *App) {
+	app.waitThenAddDownSite()
+	s.checkStatus(app)
+}
+
+func (s site) checkStatus(app *App) {
+	go func(url string) {
+		defer app.wg.Done()
+		resp, err := app.client.Head(url)
+		if err != nil {
+			s.status = err.Error()
+			app.siteIsDown <- s
+			return
+		}
+		if resp.StatusCode != http.StatusOK {
+			s.status = resp.Status
+			app.siteIsDown <- s
+		}
+	}(s.url)
+}
+
+func (app *App) waitThenAddDownSite() {
 	go func() {
 		for {
-			res := <-siteDown
-			app.unreachableSites = append(app.unreachableSites, res)
+			site := <-app.siteIsDown
+			// TODO: Still seems to be a data race here
+			app.unreachableSites = append(app.unreachableSites, site)
 		}
 	}()
 }
 
-func (app *App) checkForUnrechableSite() {
-	var wg sync.WaitGroup
-	for _, url := range app.Urls {
-		wg.Add(1)
-		go func(url string) {
-			defer wg.Done()
-			resp, err := app.client.Head(url)
-			if err != nil {
-				siteDown <- site{url: url, status: err.Error()}
-				return
-			}
-			if resp.StatusCode != http.StatusOK {
-				siteDown <- site{url: url, status: resp.Status}
-			}
-		}(url)
+func newApp() *App {
+	app := new(App)
+	configFile := os.Args[1]
+	app.loadConfig(configFile)
+	// Timeout after 10 seconds
+	tr := &http.Transport{
+		IdleConnTimeout: 10 * time.Second,
 	}
-	wg.Wait()
+	app.client = &http.Client{Transport: tr}
+	return app
 }
+
 func (app *App) loadConfig(path string) {
 	configFile, err := os.Open(path)
 	die("error: unable to find configuration file: %v", err)
