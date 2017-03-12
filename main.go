@@ -12,10 +12,10 @@ import (
 )
 
 type App struct {
-	Urls      []string
-	client    *http.Client
-	downSites chan site
-	wg        sync.WaitGroup
+	Urls         []string
+	client       *http.Client
+	unreachables chan site
+	wg           sync.WaitGroup
 }
 
 type site struct {
@@ -32,7 +32,18 @@ func main() {
 	config, err := os.Open(configFile)
 	die("error: unable to find configuration file: %v", err)
 	app := newApp(config)
-	app.downSites = make(chan site, len(app.Urls))
+	app.checkForUnreachableSites()
+	if len(app.unreachables) > 0 {
+		for v := range app.unreachables {
+			log.Printf("URL %v \n returned status: %v", v.url, v.status)
+		}
+		os.Exit(-1)
+	}
+
+}
+
+func (app *App) checkForUnreachableSites() {
+	app.unreachables = make(chan site, len(app.Urls))
 	for _, url := range app.Urls {
 		app.wg.Add(1)
 		site := site{url: url}
@@ -40,17 +51,7 @@ func main() {
 	}
 	// Wait until all sites are checked
 	app.wg.Wait()
-	close(app.downSites)
-	if len(app.downSites) > 0 {
-		for v := range app.downSites {
-			log.Printf("URL %v \n returned status: %v", v.url, v.status)
-		}
-		os.Exit(-1)
-	}
-}
-
-func (a *App) checkForUnreachableSites() {
-
+	close(app.unreachables)
 }
 
 func (s site) isDown(app *App) {
@@ -59,12 +60,12 @@ func (s site) isDown(app *App) {
 		resp, err := app.client.Head(url)
 		if err != nil {
 			s.status = err.Error()
-			app.downSites <- s
+			app.unreachables <- s
 			return
 		}
 		if resp.StatusCode != http.StatusOK {
 			s.status = resp.Status
-			app.downSites <- s
+			app.unreachables <- s
 		}
 	}(s.url)
 }
