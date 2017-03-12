@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -15,12 +16,8 @@ func TestIsDownReturnsCorrectStatusServiceUnavailable(t *testing.T) {
 	}))
 	defer ts.Close()
 	//t.Error("%v should not return error status")
-	app := new(App)
-	// Timeout after 10 seconds
-	tr := &http.Transport{
-		IdleConnTimeout: 10 * time.Second,
-	}
-	app.client = &http.Client{Transport: tr}
+	config := bytes.NewBufferString("{}")
+	app := newApp(config)
 	app.downSites = make(chan site)
 	site := site{url: ts.URL}
 	app.wg.Add(1)

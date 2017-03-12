@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -27,7 +28,10 @@ func main() {
 		fmt.Print("usage: godown <config.json>\n")
 		os.Exit(-1)
 	}
-	app := newApp()
+	configFile := os.Args[1]
+	config, err := os.Open(configFile)
+	die("error: unable to find configuration file: %v", err)
+	app := newApp(config)
 	app.downSites = make(chan site, len(app.Urls))
 	for _, url := range app.Urls {
 		app.wg.Add(1)
@@ -43,6 +47,10 @@ func main() {
 		}
 		os.Exit(-1)
 	}
+}
+
+func (a *App) checkForUnreachableSites() {
+
 }
 
 func (s site) isDown(app *App) {
@@ -61,24 +69,17 @@ func (s site) isDown(app *App) {
 	}(s.url)
 }
 
-func newApp() *App {
+func newApp(config io.ReadWriter) *App {
 	app := new(App)
-	configFile := os.Args[1]
-	app.loadConfig(configFile)
+	decoder := json.NewDecoder(config)
+	err := decoder.Decode(app)
+	die("error: unable to parse configuration file: %v", err)
 	// Timeout after 10 seconds
 	tr := &http.Transport{
 		IdleConnTimeout: 10 * time.Second,
 	}
 	app.client = &http.Client{Transport: tr}
 	return app
-}
-
-func (app *App) loadConfig(path string) {
-	configFile, err := os.Open(path)
-	die("error: unable to find configuration file: %v", err)
-	decoder := json.NewDecoder(configFile)
-	err = decoder.Decode(app)
-	die("error: unable to parse configuration file: %v", err)
 }
 
 func die(format string, err error) {
