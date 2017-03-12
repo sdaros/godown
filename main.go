@@ -49,7 +49,6 @@ func (app *App) checkForUnreachableSites() {
 		site := site{url: url}
 		site.isDown(app)
 	}
-	// Wait until all sites are checked
 	app.wg.Wait()
 	close(app.unreachables)
 }
@@ -75,11 +74,8 @@ func newApp(config io.ReadWriter) *App {
 	decoder := json.NewDecoder(config)
 	err := decoder.Decode(app)
 	die("error: unable to parse configuration file: %v", err)
-	// Timeout after 10 seconds
-	tr := &http.Transport{
-		IdleConnTimeout: 10 * time.Second,
-	}
-	app.client = &http.Client{Transport: tr}
+	// Timeout and assume error if request takes too long
+	app.client = &http.Client{Timeout: 10 * time.Second}
 	return app
 }
 

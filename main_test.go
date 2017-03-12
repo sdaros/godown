@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestCheckForUnreachableSitesReportsServiceUnavailable(t *testing.T) {
@@ -42,10 +43,27 @@ func TestCheckForUnreachableSitesDoesntReportErrorOnStatusOK(t *testing.T) {
 	app.Urls = append(app.Urls, ts.URL)
 	app.checkForUnreachableSites()
 	if len(app.unreachables) > 0 {
-		t.Error("site should not have been added to the down queue")
+		t.Error("site should not have been added to the unreachables queue")
 	}
 }
 
-func TestCheckForUnreachableSitesReportsErrorOnIdleConnTimeout(t *testing.T) {
+func TestCheckForUnreachableSitesReportsErrorOnTimeout(t *testing.T) {
+	clientTimeout := 100 * time.Millisecond
+	serverTimeout := 200 * time.Millisecond
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(serverTimeout)
+		w.WriteHeader(http.StatusOK)
+		w.Header().Set("Content-Type", "text/plain")
+		io.WriteString(w, "Status OK")
 
+	}))
+	defer ts.Close()
+	config := bytes.NewBufferString("{}")
+	app := newApp(config)
+	app.client.Timeout = clientTimeout
+	app.Urls = append(app.Urls, ts.URL)
+	app.checkForUnreachableSites()
+	if len(app.unreachables) == 0 {
+		t.Error("client should have timed out on request")
+	}
 }
