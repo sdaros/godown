@@ -4,4 +4,4 @@ OnFailure=email-status@%n.service
 
 [Service]
 Type=oneshot
-ExecStart=%h/bin/godown %h/.config/godown/config.json
+ExecStart=/home/sd/bin/godown /home/sd/.config/godown/config.json
