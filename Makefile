@@ -5,12 +5,12 @@ build:
 
 test:
 	go test -v ./...
-	echo $(HOME)
 
 install:
 	mkdir -p ~/bin/
 	mkdir -p ~/.config/systemd/user/
 	mkdir -p ~/.config/godown/
+	cp godown ~/bin/
 	cp godown.service ~/.config/systemd/user/
 	cp godown.timer ~/.config/systemd/user/
 	cp config.json.example ~/.config/godown/
