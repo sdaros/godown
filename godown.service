@@ -1,6 +1,5 @@
 [Unit]
 Description=Check if URLs are down
-OnFailure=email-status@%n.service
 
 [Service]
 Type=oneshot
