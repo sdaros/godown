@@ -1,10 +1,13 @@
 {
-  "Urls": [
-    "http://cip.li",
-    "http://cip.li/stefano",
-    "http://heim.cip.li",
-    "http://kristinsendler.de",
-    "http://kristinsendler.dde",
-    "http://kristinsensddler.dde"
-  ]
+  "urls": [
+    "https://example.com",
+    "http://example2.com"
+  ],
+  "email": {
+    "username": "mailer@example.com",
+    "password": "p@ssw0rd",
+    "server": "smtp.gmail.com",
+    "port": "587",
+    "recipient": "recipient@example.com"
+  }
 }

@@ -6,13 +6,15 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/smtp"
 	"os"
 	"sync"
 	"time"
 )
 
 type App struct {
-	Urls         []string
+	Email        Email    `json:"email"`
+	Urls         []string `json:"urls"`
 	client       *http.Client
 	unreachables chan site
 	wg           sync.WaitGroup
@@ -23,6 +25,14 @@ type site struct {
 	status string
 }
 
+type Email struct {
+	Username  string `json:"username"`
+	Password  string `json:"password"`
+	Server    string `json:"server"`
+	Port      string `json:"port"`
+	Recipient string `json:"recipient"`
+}
+
 func main() {
 	if len(os.Args) <= 1 {
 		fmt.Print("usage: godown <config.json>\n")
@@ -30,16 +40,14 @@ func main() {
 	}
 	configFile := os.Args[1]
 	config, err := os.Open(configFile)
-	die("error: unable to find configuration file: %v", err)
+	if err != nil {
+		log.Fatalf("error: unable to find configuration file: %v", err)
+	}
 	app := newApp(config)
 	app.checkForUnreachableSites()
 	if len(app.unreachables) > 0 {
-		for v := range app.unreachables {
-			log.Printf("URL %v \n returned status: %v", v.url, v.status)
-		}
-		os.Exit(-1)
+		app.sendMail()
 	}
-
 }
 
 func (app *App) checkForUnreachableSites() {
@@ -69,18 +77,29 @@ func (s site) isDown(app *App) {
 	}(s.url)
 }
 
+func (app *App) sendMail() {
+	var unreachables string
+	for v := range app.unreachables {
+		unreachables += fmt.Sprintf("---\nURL: %v\nError: %v\n", v.url, v.status)
+	}
+	auth := smtp.PlainAuth("", app.Email.Username, app.Email.Password, app.Email.Server)
+	to := []string{app.Email.Recipient}
+	msg := []byte("To: " + app.Email.Recipient + "\r\n" +
+		"Subject: godown discovered unreachable sites!\r\n" +
+		"\r\n" +
+		unreachables + "\r\n")
+	err := smtp.SendMail(app.Email.Server+":"+app.Email.Port, auth, app.Email.Username, to, msg)
+	if err != nil {
+		log.Fatalf("error: unable to send email to %v: %v", to, err)
+	}
+}
+
 func newApp(config io.ReadWriter) *App {
 	app := new(App)
-	decoder := json.NewDecoder(config)
-	err := decoder.Decode(app)
-	die("error: unable to parse configuration file: %v", err)
+	if err := json.NewDecoder(config).Decode(app); err != nil {
+		log.Fatalf("error: unable to parse configuration file: %v", err)
+	}
 	// Timeout and assume error if request takes too long
 	app.client = &http.Client{Timeout: 10 * time.Second}
 	return app
-}
-
-func die(format string, err error) {
-	if err != nil {
-		log.Fatalf(format, err)
-	}
 }
