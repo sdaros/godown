@@ -1,7 +1,7 @@
 all: build
 
 build:
-	go build
+	go build -ldflags "-extldflags '-static'" -o godown
 
 test:
 	go test -v ./...
@@ -11,7 +11,7 @@ install:
 	mkdir -p ~/.config/systemd/user/
 	mkdir -p ~/.config/godown/
 	cp godown ~/bin/
-	cp godown.service ~/.config/systemd/user/
+	cp godown.service ~/.config/systemd/user
 	cp godown.timer ~/.config/systemd/user/
 	cp config.json.example ~/.config/godown/
 	chmod 600 ~/.config/godown/config.json.example
