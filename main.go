@@ -64,14 +64,18 @@ func (app *App) checkForUnreachableSites() {
 func (s site) isDown(app *App) {
 	go func(url string) {
 		defer app.wg.Done()
-		resp, err := app.client.Head(url)
-		if err != nil {
-			s.status = err.Error()
-			app.unreachables <- s
-			return
+		isUnreachable := false
+		for retries := 0; retries < 5; retries++ {
+			resp, err := app.client.Head(url)
+			if err != nil {
+				s.status = err.Error()
+				isUnreachable = true
+			} else if resp.StatusCode != http.StatusOK {
+				s.status = resp.Status
+				isUnreachable = true
+			}
 		}
-		if resp.StatusCode != http.StatusOK {
-			s.status = resp.Status
+		if isUnreachable {
 			app.unreachables <- s
 		}
 	}(s.url)
