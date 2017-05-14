@@ -104,6 +104,6 @@ func newApp(config io.ReadWriter) *App {
 		log.Fatalf("error: unable to parse configuration file: %v", err)
 	}
 	// Timeout and assume error if request takes too long
-	app.client = &http.Client{Timeout: 10 * time.Second}
+	app.client = &http.Client{Timeout: 30 * time.Second}
 	return app
 }
