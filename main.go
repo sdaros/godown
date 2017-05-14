@@ -54,8 +54,8 @@ func (app *App) checkForUnreachableSites() {
 	app.unreachables = make(chan site, len(app.Urls))
 	for _, url := range app.Urls {
 		app.wg.Add(1)
-		site := site{url: url}
-		site.isDown(app)
+		s := site{url: url}
+		s.isDown(app)
 	}
 	app.wg.Wait()
 	close(app.unreachables)
